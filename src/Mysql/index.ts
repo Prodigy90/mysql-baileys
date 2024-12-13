@@ -1,11 +1,10 @@
 import {
   sqlData,
-  MySQLConfig,
   SignalDataTypeMap,
   AuthenticationCreds,
   AuthenticationState
 } from "../Types";
-import { Pool, createPool } from "mysql2/promise";
+import { Pool } from "mysql2/promise";
 import { BufferJSON, initAuthCreds, fromObject } from "../Utils";
 
 /**
@@ -29,37 +28,26 @@ import { BufferJSON, initAuthCreds, fromObject } from "../Utils";
  * @param {boolean} isServer - If your connection is a server. (Default: false)
  */
 
-export async function mySQLPool(config: MySQLConfig) {
-  try {
-    const pool = createPool({
-      ssl: config.ssl,
-      enableKeepAlive: true,
-      password: config.password,
-      port: config.port || 3306,
-      user: config.user || "root",
-      password1: config.password1,
-      password2: config.password2,
-      password3: config.password3,
-      keepAliveInitialDelay: 5000,
-      socketPath: config.socketPath,
-      host: config.host || "localhost",
-      localAddress: config.localAddress,
-      isServer: config.isServer || false,
-      database: config.database || "base",
-      insecureAuth: config.insecureAuth || false
-    });
+let newConnection = true;
 
-    const query = await pool.execute(
-      "CREATE TABLE IF NOT EXISTS `" +
-        (config.tableName || "auth") +
-        "` (`session` varchar(50) NOT NULL, `id` varchar(80) NOT NULL, `value` json DEFAULT NULL, UNIQUE KEY `idxunique` (`session`, `id`), KEY `idxsession` (`session`), KEY `idxid` (`id`)) ENGINE=MyISAM;"
-    );
-
-    console.log("Connected to MySQL database", query);
-    return pool;
-  } catch (error) {
-    console.error(error);
-    return null;
+async function connection(pool: Pool, tableName = "auth"): Promise<void> {
+  if (newConnection) {
+    try {
+      await pool.execute(
+        `CREATE TABLE IF NOT EXISTS \`${tableName}\` (
+                    \`session\` varchar(50) NOT NULL,
+                    \`id\` varchar(80) NOT NULL,
+                    \`value\` json DEFAULT NULL,
+                    UNIQUE KEY \`idxunique\` (\`session\`, \`id\`),
+                    KEY \`idxsession\` (\`session\`),
+                    KEY \`idxid\` (\`id\`)
+                ) ENGINE=MyISAM;`
+      );
+      newConnection = false;
+    } catch (error) {
+      console.error("Error creating table:", error);
+      throw new Error("Failed to initialize database connection");
+    }
   }
 }
 
@@ -73,6 +61,7 @@ export const useMySQLAuthState = async (
   removeCreds: () => Promise<void>;
   query: (sql: string, values: string[]) => Promise<sqlData>;
 }> => {
+  await connection(pool);
   const maxtRetries = 10;
   const tableName = "auth";
   const retryRequestDelayMs = 200;
