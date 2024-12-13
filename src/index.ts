@@ -1,3 +1,3 @@
-import { useMySQLAuthState } from './Mysql'
-export { useMySQLAuthState }
+import { mySQLPool, useMySQLAuthState } from './Mysql'
+export { mySQLPool, useMySQLAuthState }
 export default useMySQLAuthState
